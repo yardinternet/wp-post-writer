@@ -1,0 +1,20 @@
+{
+	"name": "yard/wp-post-writer",
+	"type": "package",
+	"description": "Write-spec based persistence for WordPress posts: upsert, prune and bulk indexing.",
+	"license": "MIT",
+	"config": {
+		"sort-packages": true
+	},
+	"require": {
+		"php": ">=8.2"
+	},
+	"require-dev": {
+		"yard/php-cs-fixer-rules": "^1.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"Yard\\PostWriter\\": "src/"
+		}
+	}
+}
