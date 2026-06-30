@@ -26,16 +26,3 @@ it('does not upsert or prune in dry-run mode', function () {
         ->and($report->pruned)->toBe(1)
         ->and($report->dryRun)->toBeTrue();
 });
-
-it('cleans the post cache after each upsert in normal mode', function () {
-    $writer = new FakeWpPostWriter();
-    WP_Mock::userFunction('clean_post_cache')->once()->with(1);
-
-    (new PostSync($writer, 'member'))
-        ->from([['id' => 'a']])
-        ->identify(fn (array $row): string => $row['id'], 'external_id')
-        ->write(fn (array $row): PostWrite => new PostWrite(title: 'x'))
-        ->run();
-
-    expect($writer->upserts)->toHaveCount(1);
-});

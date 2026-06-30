@@ -7,11 +7,6 @@ use Yard\PostWriter\PostWrite;
 use Yard\PostWriter\Tests\Support\FakeWpPostWriter;
 use Yard\PostWriter\UpsertResult;
 
-// Stubbed as a no-op so tests stay green once Task 12 makes persist() call it.
-beforeEach(function () {
-    WP_Mock::userFunction('clean_post_cache')->andReturn(null);
-});
-
 it('upserts each item and counts created and updated', function () {
     $writer = new FakeWpPostWriter();
     $writer->existing = ['b' => 55];

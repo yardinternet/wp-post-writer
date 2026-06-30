@@ -6,10 +6,6 @@ use Yard\PostWriter\PostSync;
 use Yard\PostWriter\PostWrite;
 use Yard\PostWriter\Tests\Support\FakeWpPostWriter;
 
-beforeEach(function () {
-    WP_Mock::userFunction('clean_post_cache')->andReturn(null);
-});
-
 it('prunes with the collected keep set and counts', function () {
     $writer = new FakeWpPostWriter();
     $writer->deletedByPrune = [7, 8];

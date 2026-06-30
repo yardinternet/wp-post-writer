@@ -241,7 +241,6 @@ final class PostSync
 		}
 
 		$result = $this->writer->upsert($this->postType, $write, $matchMeta);
-		clean_post_cache($result->id);
 		UpsertAction::Created === $result->action ? $this->created++ : $this->updated++;
 		if (null !== $this->onWrittenFn) {
 			($this->onWrittenFn)($result);
