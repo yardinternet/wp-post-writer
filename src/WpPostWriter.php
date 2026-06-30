@@ -6,15 +6,8 @@ namespace Yard\PostWriter;
 
 use RuntimeException;
 
-/**
- * Persists a PostWrite to WordPress. Generic: no domain knowledge.
- */
 class WpPostWriter
 {
-	/**
-	 * Match an existing post (by matchMeta) and update it, or insert a new one.
-	 * Only the fields in the spec are written; everything else is left untouched.
-	 */
 	public function upsert(string $postType, PostWrite $write): int
 	{
 		$id = $this->findByMeta($postType, $write->matchMeta);
@@ -33,27 +26,21 @@ class WpPostWriter
 		}
 		$id = (int) $result;
 
-		if ([] !== $write->meta && !function_exists('update_field')) {
+		if ([] !== $write->meta && ! function_exists('update_field')) {
 			throw new RuntimeException(
 				'ACF (update_field) is required to persist meta fields but is not available.',
 			);
 		}
 		foreach ($write->meta as $key => $value) {
-			update_field($key, $value ?? '', $id);   // null/'' clears the field
+			update_field($key, $value ?? '', $id);
 		}
 		foreach ($write->terms as $taxonomy => $names) {
-			wp_set_object_terms($id, $names, $taxonomy, false);   // empty array clears
+			wp_set_object_terms($id, $names, $taxonomy, false);
 		}
 
 		return $id;
 	}
 
-	/**
-	 * Delete posts of $postType whose $metaKey value is not in $keep. Posts without
-	 * $metaKey (e.g. manually created) are never touched. Returns number deleted.
-	 *
-	 * @param array<int, string> $keep
-	 */
 	public function prune(string $postType, string $metaKey, array $keep): int
 	{
 		$ids = get_posts([
@@ -77,9 +64,6 @@ class WpPostWriter
 		return $deleted;
 	}
 
-	/**
-	 * Run a callback with FacetWP real-time indexing suspended, then reindex once.
-	 */
 	public function bulk(callable $callback): mixed
 	{
 		add_filter('facetwp_indexer_is_enabled', '__return_false');
@@ -94,9 +78,6 @@ class WpPostWriter
 		}
 	}
 
-	/**
-	 * @param array<string, string> $matchMeta
-	 */
 	private function findByMeta(string $postType, array $matchMeta): ?int
 	{
 		if ([] === $matchMeta) {
