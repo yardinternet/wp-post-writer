@@ -8,17 +8,26 @@ use RuntimeException;
 
 class WpPostWriter
 {
-	public function upsert(string $postType, PostWrite $write): int
+	public static function sync(string $postType): PostSync
 	{
-		$id = $this->findByMeta($postType, $write->matchMeta);
+		return new PostSync(new self(), $postType);
+	}
 
-		if (null !== $id) {
-			$result = wp_update_post(['ID' => $id] + $write->core, true);
+	/** @param array<string, string> $matchMeta */
+	public function upsert(string $postType, PostWrite $write, array $matchMeta = []): UpsertResult
+	{
+		$existingId = $this->find($postType, $matchMeta);
+		$core = $this->core($write);
+
+		if (null !== $existingId) {
+			$result = wp_update_post(['ID' => $existingId] + $core, true);
+			$action = UpsertAction::Updated;
 		} else {
 			$result = wp_insert_post(
-				$write->core + ['post_type' => $postType, 'post_status' => $write->insertStatus],
+				$core + ['post_type' => $postType, 'post_status' => $write->insertStatus],
 				true,
 			);
+			$action = UpsertAction::Created;
 		}
 
 		if (is_wp_error($result)) {
@@ -26,61 +35,14 @@ class WpPostWriter
 		}
 		$id = (int) $result;
 
-		if ([] !== $write->meta && ! function_exists('update_field')) {
-			throw new RuntimeException(
-				'ACF (update_field) is required to persist meta fields but is not available.',
-			);
-		}
-		foreach ($write->meta as $key => $value) {
-			update_field($key, $value ?? '', $id);
-		}
-		foreach ($write->terms as $taxonomy => $names) {
-			wp_set_object_terms($id, $names, $taxonomy, false);
-		}
+		$this->writeMeta($id, $write->meta);
+		$this->writeTerms($id, $write->terms);
 
-		return $id;
-	}
-
-	/** @param array<int, string> $keep */
-	public function prune(string $postType, string $metaKey, array $keep): int
-	{
-		$ids = get_posts([
-			'post_type' => $postType,
-			'post_status' => 'any',
-			'numberposts' => -1,
-			'fields' => 'ids',
-			'meta_query' => [['key' => $metaKey, 'compare' => 'EXISTS']],
-		]);
-
-		$deleted = 0;
-		foreach ($ids as $id) {
-			$value = (string) get_post_meta($id, $metaKey, true);
-			if ('' === $value || in_array($value, $keep, true)) {
-				continue;
-			}
-			wp_delete_post($id, true);
-			$deleted++;
-		}
-
-		return $deleted;
-	}
-
-	public function bulk(callable $callback): mixed
-	{
-		add_filter('facetwp_indexer_is_enabled', '__return_false');
-
-		try {
-			return $callback();
-		} finally {
-			remove_filter('facetwp_indexer_is_enabled', '__return_false');
-			if (function_exists('FWP')) {
-				FWP()->indexer->index();
-			}
-		}
+		return new UpsertResult($id, $action);
 	}
 
 	/** @param array<string, string> $matchMeta */
-	private function findByMeta(string $postType, array $matchMeta): ?int
+	public function find(string $postType, array $matchMeta): ?int
 	{
 		if ([] === $matchMeta) {
 			return null;
@@ -106,5 +68,56 @@ class WpPostWriter
 		]);
 
 		return $ids[0] ?? null;
+	}
+
+	/** @return array<string, mixed> */
+	private function core(PostWrite $write): array
+	{
+		$core = ['post_title' => $write->title];
+
+		if (null !== $write->content) {
+			$core['post_content'] = $write->content;
+		}
+		if (null !== $write->excerpt) {
+			$core['post_excerpt'] = $write->excerpt;
+		}
+		if (null !== $write->slug) {
+			$core['post_name'] = $write->slug;
+		}
+		if (null !== $write->date) {
+			$core['post_date'] = $write->date->format('Y-m-d H:i:s');
+		}
+		if (null !== $write->author) {
+			$core['post_author'] = $write->author;
+		}
+		if (null !== $write->parent) {
+			$core['post_parent'] = $write->parent;
+		}
+		if (null !== $write->menuOrder) {
+			$core['menu_order'] = $write->menuOrder;
+		}
+
+		return $core;
+	}
+
+	/** @param array<string, mixed> $meta */
+	private function writeMeta(int $id, array $meta): void
+	{
+		if ([] !== $meta && ! function_exists('update_field')) {
+			throw new RuntimeException(
+				'ACF (update_field) is required to persist meta fields but is not available.',
+			);
+		}
+		foreach ($meta as $key => $value) {
+			update_field($key, $value ?? '', $id);
+		}
+	}
+
+	/** @param array<string, TermSelection> $terms */
+	private function writeTerms(int $id, array $terms): void
+	{
+		foreach ($terms as $taxonomy => $selection) {
+			wp_set_object_terms($id, [...$selection->names, ...$selection->ids], $taxonomy, false);
+		}
 	}
 }
