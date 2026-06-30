@@ -35,8 +35,8 @@ class WpPostWriter
 		}
 		$id = (int) $result;
 
-		$this->writeMeta($id, $write->meta);
-		$this->writeTerms($id, $write->terms);
+		$this->persistMeta($id, $write->meta, array_keys($matchMeta), UpsertAction::Created === $action);
+		$this->persistTerms($id, $write->terms);
 
 		return new UpsertResult($id, $action);
 	}
@@ -100,24 +100,53 @@ class WpPostWriter
 		return $core;
 	}
 
-	/** @param array<string, mixed> $meta */
-	private function writeMeta(int $id, array $meta): void
+	/**
+	 * @param array<string, mixed> $meta
+	 * @param list<string>         $identityKeys
+	 */
+	private function persistMeta(int $id, array $meta, array $identityKeys, bool $inserted): void
 	{
 		if ([] !== $meta && ! function_exists('update_field')) {
 			throw new RuntimeException(
 				'ACF (update_field) is required to persist meta fields but is not available.',
 			);
 		}
+
+		// The identity meta is the anchor for matching and pruning; write it first so any later
+		// failure leaves a findable, prunable post that self-heals on the next run.
+		foreach ($identityKeys as $key) {
+			if (array_key_exists($key, $meta)) {
+				$this->writeMetaField($id, $key, $meta[$key], $inserted);
+			}
+		}
 		foreach ($meta as $key => $value) {
-			update_field($key, $value ?? '', $id);
+			if (in_array($key, $identityKeys, true)) {
+				continue;
+			}
+			$this->writeMetaField($id, $key, $value, false);
 		}
 	}
 
+	private function writeMetaField(int $id, string $key, mixed $value, bool $deleteOnFailure): void
+	{
+		if (false !== update_field($key, $value ?? '', $id)) {
+			return;
+		}
+		if ($deleteOnFailure) {
+			wp_delete_post($id, true);
+		}
+
+		throw new RuntimeException(sprintf('Failed to write meta field "%s".', $key));
+	}
+
 	/** @param array<string, TermSelection> $terms */
-	private function writeTerms(int $id, array $terms): void
+	private function persistTerms(int $id, array $terms): void
 	{
 		foreach ($terms as $taxonomy => $selection) {
-			wp_set_object_terms($id, [...$selection->names, ...$selection->ids], $taxonomy, false);
+			$result = wp_set_object_terms($id, [...$selection->names, ...$selection->ids], $taxonomy, false);
+			if (is_wp_error($result)) {
+				throw new RuntimeException(sprintf('Failed to assign terms for taxonomy "%s".', $taxonomy));
+			}
 		}
 	}
 }
