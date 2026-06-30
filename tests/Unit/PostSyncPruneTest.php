@@ -42,7 +42,7 @@ it('skips prune with a warning on an empty keep set', function () {
 
     expect($writer->pruneCalls)->toBe([])
         ->and($report->pruned)->toBe(0)
-        ->and($report->warnings)->not->toBe([]);
+        ->and($report->warnings)->toBe(['prune overgeslagen — geen items uit de bron ontvangen']);
 });
 
 it('does not prune when not requested', function () {

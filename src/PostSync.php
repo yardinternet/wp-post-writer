@@ -161,7 +161,7 @@ final class PostSync
 
 	private function runPrune(): void
 	{
-		if (! $this->prune) {
+		if (! $this->prune || null === $this->identityMeta) {
 			return;
 		}
 
