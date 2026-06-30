@@ -4,12 +4,17 @@
 	"description": "Write-spec based persistence for WordPress posts: upsert, prune and bulk indexing.",
 	"license": "MIT",
 	"config": {
-		"sort-packages": true
+		"sort-packages": true,
+		"allow-plugins": {
+			"pestphp/pest-plugin": true
+		}
 	},
 	"require": {
 		"php": ">=8.2"
 	},
 	"require-dev": {
+		"10up/wp_mock": "^0.4.2",
+		"pestphp/pest": "^2.36",
 		"phpstan/phpstan": "^2.2",
 		"szepeviktor/phpstan-wordpress": "^2.0",
 		"yard/php-cs-fixer-rules": "^1.0"
@@ -19,8 +24,19 @@
 			"Yard\\PostWriter\\": "src/"
 		}
 	},
+	"autoload-dev": {
+		"psr-4": {
+			"Yard\\PostWriter\\Tests\\": "tests/"
+		}
+	},
 	"scripts": {
+		"all": [
+			"@test",
+			"@analyse",
+			"@format"
+		],
 		"analyse": "vendor/bin/phpstan analyse --debug --memory-limit 1G",
-		"format": "vendor/bin/php-cs-fixer fix"
+		"format": "vendor/bin/php-cs-fixer fix",
+		"test": "vendor/bin/pest"
 	}
 }
