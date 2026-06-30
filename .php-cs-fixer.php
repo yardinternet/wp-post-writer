@@ -6,7 +6,7 @@ use PhpCsFixer\Finder;
 use Yard\PhpCsFixerRules\Config;
 
 $finder = Finder::create()
-	->in(__DIR__)
+	->in([__DIR__ . '/src', __DIR__ . '/stubs'])
 	->name('*.php')
 	->ignoreDotFiles(true)
 	->ignoreVCS(true)

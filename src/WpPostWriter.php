@@ -41,6 +41,7 @@ class WpPostWriter
 		return $id;
 	}
 
+	/** @param array<int, string> $keep */
 	public function prune(string $postType, string $metaKey, array $keep): int
 	{
 		$ids = get_posts([
@@ -78,6 +79,7 @@ class WpPostWriter
 		}
 	}
 
+	/** @param array<string, string> $matchMeta */
 	private function findByMeta(string $postType, array $matchMeta): ?int
 	{
 		if ([] === $matchMeta) {
