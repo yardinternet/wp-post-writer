@@ -172,6 +172,12 @@ final class PostSync
 			return;
 		}
 
+		if ($this->dryRun) {
+			$this->pruned = count($this->writer->prunable($this->postType, (string) $this->identityMeta, $keep));
+
+			return;
+		}
+
 		$deleted = $this->writer->prune($this->postType, (string) $this->identityMeta, $keep);
 		foreach ($deleted as $id) {
 			if (null !== $this->onPrunedFn) {
@@ -228,7 +234,14 @@ final class PostSync
 	/** @param array<string, string> $matchMeta */
 	private function persist(PostWrite $write, array $matchMeta): void
 	{
+		if ($this->dryRun) {
+			null === $this->writer->find($this->postType, $matchMeta) ? $this->created++ : $this->updated++;
+
+			return;
+		}
+
 		$result = $this->writer->upsert($this->postType, $write, $matchMeta);
+		clean_post_cache($result->id);
 		UpsertAction::Created === $result->action ? $this->created++ : $this->updated++;
 		if (null !== $this->onWrittenFn) {
 			($this->onWrittenFn)($result);
