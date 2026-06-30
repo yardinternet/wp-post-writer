@@ -46,6 +46,11 @@ final class PostSync
 	/** @var list<string> */
 	private array $keep = [];
 
+	/** @var list<string> */
+	private array $warnings = [];
+
+	private int $pruned = 0;
+
 	public function __construct(
 		private WpPostWriter $writer,
 		private string $postType,
@@ -141,19 +146,39 @@ final class PostSync
 			$this->handle($item);
 		}
 
-		$pruned = 0;
+		$this->runPrune();
 
-		if ($this->prune && null !== $this->identityMeta) {
-			$prunedIds = $this->writer->prune($this->postType, $this->identityMeta, $this->keep);
-			$pruned = count($prunedIds);
-			foreach ($prunedIds as $id) {
-				if (null !== $this->onPrunedFn) {
-					($this->onPrunedFn)($id);
-				}
-			}
+		return new SyncReport(
+			$this->created,
+			$this->updated,
+			$this->skipped,
+			$this->filtered,
+			$this->pruned,
+			$this->dryRun,
+			$this->warnings,
+		);
+	}
+
+	private function runPrune(): void
+	{
+		if (! $this->prune) {
+			return;
 		}
 
-		return new SyncReport($this->created, $this->updated, $this->skipped, $this->filtered, $pruned, $this->dryRun);
+		$keep = array_values(array_unique($this->keep));
+		if ([] === $keep) {
+			$this->warnings[] = 'prune overgeslagen — geen items uit de bron ontvangen';
+
+			return;
+		}
+
+		$deleted = $this->writer->prune($this->postType, (string) $this->identityMeta, $keep);
+		foreach ($deleted as $id) {
+			if (null !== $this->onPrunedFn) {
+				($this->onPrunedFn)($id);
+			}
+		}
+		$this->pruned = count($deleted);
 	}
 
 	private function handle(mixed $item): void
