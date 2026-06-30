@@ -116,6 +116,35 @@ class WpPostWriter
 		return $deleted;
 	}
 
+	public function bulk(callable $callback): mixed
+	{
+		add_filter('facetwp_indexer_is_enabled', '__return_false');
+		if (class_exists('SearchWP')) {
+			\SearchWP::$indexer->pause();
+		}
+		if (! defined('WP_IMPORTING')) {
+			define('WP_IMPORTING', true);
+		}
+		wp_defer_term_counting(true);
+		wp_defer_comment_counting(true);
+		wp_suspend_cache_invalidation(true);
+
+		try {
+			return $callback();
+		} finally {
+			wp_suspend_cache_invalidation(false);
+			wp_defer_comment_counting(false);
+			wp_defer_term_counting(false);
+			remove_filter('facetwp_indexer_is_enabled', '__return_false');
+			if (class_exists('SearchWP')) {
+				\SearchWP::$indexer->unpause();
+			}
+			if (function_exists('FWP')) {
+				FWP()->indexer->index();
+			}
+		}
+	}
+
 	/** @return array<string, mixed> */
 	private function core(PostWrite $write): array
 	{
