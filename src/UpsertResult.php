@@ -6,9 +6,9 @@ namespace Yard\PostWriter;
 
 final class UpsertResult
 {
-    public function __construct(
-        public int $id,
-        public UpsertAction $action,
-    ) {
-    }
+	public function __construct(
+		public int $id,
+		public UpsertAction $action,
+	) {
+	}
 }

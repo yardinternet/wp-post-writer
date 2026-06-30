@@ -6,6 +6,6 @@ namespace Yard\PostWriter;
 
 enum UpsertAction: string
 {
-    case Created = 'created';
-    case Updated = 'updated';
+	case Created = 'created';
+	case Updated = 'updated';
 }
