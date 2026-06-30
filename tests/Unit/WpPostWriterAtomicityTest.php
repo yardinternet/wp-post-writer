@@ -62,7 +62,7 @@ it('throws when term assignment returns a wp error', function () {
         }
     };
     WP_Mock::userFunction('wp_set_object_terms')->andReturn($wpError);
-    WP_Mock::userFunction('is_wp_error')->andReturnUsing(fn ($value): bool => is_object($value));
+    WP_Mock::userFunction('is_wp_error')->andReturnUsing(fn ($value): bool => is_object($value) && method_exists($value, 'get_error_message'));
 
     $write = new PostWrite(title: 'Acme', terms: ['sector' => TermSelection::names(['Bouw'])]);
 
