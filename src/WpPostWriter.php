@@ -145,7 +145,7 @@ class WpPostWriter
 		foreach ($terms as $taxonomy => $selection) {
 			$result = wp_set_object_terms($id, [...$selection->names, ...$selection->ids], $taxonomy, false);
 			if (is_wp_error($result)) {
-				throw new RuntimeException(sprintf('Failed to assign terms for taxonomy "%s".', $taxonomy));
+				throw new RuntimeException($result->get_error_message());
 			}
 		}
 	}

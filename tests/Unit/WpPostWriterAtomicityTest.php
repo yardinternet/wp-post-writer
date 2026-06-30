@@ -54,13 +54,18 @@ it('throws when term assignment returns a wp error', function () {
     WP_Mock::userFunction('get_posts')->andReturn([]);
     WP_Mock::userFunction('wp_insert_post')->andReturn(9);
     WP_Mock::userFunction('update_field')->andReturn(true);
-    WP_Mock::userFunction('wp_set_object_terms')->andReturn(['error']);
-    WP_Mock::userFunction('is_wp_error')->andReturnUsing(
-        fn ($value): bool => is_array($value) && 'error' === ($value[0] ?? null),
-    );
+
+    $wpError = new class {
+        public function get_error_message(): string
+        {
+            return 'invalid taxonomy';
+        }
+    };
+    WP_Mock::userFunction('wp_set_object_terms')->andReturn($wpError);
+    WP_Mock::userFunction('is_wp_error')->andReturnUsing(fn ($value): bool => is_object($value));
 
     $write = new PostWrite(title: 'Acme', terms: ['sector' => TermSelection::names(['Bouw'])]);
 
     expect(fn () => (new WpPostWriter())->upsert('member', $write))
-        ->toThrow(RuntimeException::class);
+        ->toThrow(RuntimeException::class, 'invalid taxonomy');
 });
