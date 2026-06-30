@@ -70,6 +70,52 @@ class WpPostWriter
 		return $ids[0] ?? null;
 	}
 
+	/**
+	 * @param array<int, string> $keep
+	 *
+	 * @return list<int>
+	 */
+	public function prunable(string $postType, string $metaKey, array $keep): array
+	{
+		if ([] === $keep) {
+			return [];
+		}
+
+		$ids = get_posts([
+			'post_type' => $postType,
+			'post_status' => 'any',
+			'numberposts' => -1,
+			'fields' => 'ids',
+			'meta_query' => [['key' => $metaKey, 'compare' => 'EXISTS']],
+		]);
+
+		$prunable = [];
+		foreach ($ids as $id) {
+			$value = (string) get_post_meta($id, $metaKey, true);
+			if ('' === $value || in_array($value, $keep, true)) {
+				continue;
+			}
+			$prunable[] = (int) $id;
+		}
+
+		return $prunable;
+	}
+
+	/**
+	 * @param array<int, string> $keep
+	 *
+	 * @return list<int>
+	 */
+	public function prune(string $postType, string $metaKey, array $keep): array
+	{
+		$deleted = $this->prunable($postType, $metaKey, $keep);
+		foreach ($deleted as $id) {
+			wp_delete_post($id, true);
+		}
+
+		return $deleted;
+	}
+
 	/** @return array<string, mixed> */
 	private function core(PostWrite $write): array
 	{
