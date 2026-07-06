@@ -29,6 +29,9 @@ final class PostSync
 	/** @var null|callable(int):void */
 	private $onPrunedFn = null;
 
+	/** @var null|callable(mixed):void */
+	private $onFilteredFn = null;
+
 	private bool $failFast = false;
 
 	private bool $prune = false;
@@ -114,6 +117,14 @@ final class PostSync
 		return $this;
 	}
 
+	/** @param callable(mixed):void $fn */
+	public function onFiltered(callable $fn): self
+	{
+		$this->onFilteredFn = $fn;
+
+		return $this;
+	}
+
 	public function failFast(): self
 	{
 		$this->failFast = true;
@@ -172,25 +183,25 @@ final class PostSync
 			return;
 		}
 
-		if ($this->dryRun) {
-			$this->pruned = count($this->writer->prunable($this->postType, (string) $this->identityMeta, $keep));
+		$ids = $this->dryRun
+			? $this->writer->prunable($this->postType, (string) $this->identityMeta, $keep)
+			: $this->writer->prune($this->postType, (string) $this->identityMeta, $keep);
 
-			return;
-		}
-
-		$deleted = $this->writer->prune($this->postType, (string) $this->identityMeta, $keep);
-		foreach ($deleted as $id) {
+		foreach ($ids as $id) {
 			if (null !== $this->onPrunedFn) {
 				($this->onPrunedFn)($id);
 			}
 		}
-		$this->pruned = count($deleted);
+		$this->pruned = count($ids);
 	}
 
 	private function handle(mixed $item): void
 	{
 		if (null !== $this->filterFn && ! ($this->filterFn)($item)) {
 			$this->filtered++;
+			if (null !== $this->onFilteredFn) {
+				($this->onFilteredFn)($item);
+			}
 
 			return;
 		}
@@ -234,16 +245,22 @@ final class PostSync
 	/** @param array<string, string> $matchMeta */
 	private function persist(PostWrite $write, array $matchMeta): void
 	{
-		if ($this->dryRun) {
-			null === $this->writer->find($this->postType, $matchMeta) ? $this->created++ : $this->updated++;
+		$result = $this->dryRun
+			? $this->simulate($matchMeta)
+			: $this->writer->upsert($this->postType, $write, $matchMeta);
 
-			return;
-		}
-
-		$result = $this->writer->upsert($this->postType, $write, $matchMeta);
 		UpsertAction::Created === $result->action ? $this->created++ : $this->updated++;
+
 		if (null !== $this->onWrittenFn) {
 			($this->onWrittenFn)($result);
 		}
+	}
+
+	/** @param array<string, string> $matchMeta */
+	private function simulate(array $matchMeta): UpsertResult
+	{
+		$id = $this->writer->find($this->postType, $matchMeta);
+
+		return new UpsertResult($id ?? 0, null === $id ? UpsertAction::Created : UpsertAction::Updated);
 	}
 }

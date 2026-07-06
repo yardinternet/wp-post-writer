@@ -85,6 +85,24 @@ it('drops filtered items before identify', function () {
         ->and($writer->upserts)->toHaveCount(1);
 });
 
+it('fires onFiltered for each filtered item', function () {
+    $writer = new FakeWpPostWriter();
+    $seen = [];
+
+    $report = (new PostSync($writer, 'member'))
+        ->from([['id' => 'a', 'keep' => true], ['id' => 'b', 'keep' => false]])
+        ->filter(fn (array $row): bool => $row['keep'])
+        ->identify(fn (array $row): string => $row['id'], 'external_id')
+        ->write(fn (array $row): PostWrite => new PostWrite(title: $row['id']))
+        ->onFiltered(function (array $row) use (&$seen): void {
+            $seen[] = $row['id'];
+        })
+        ->run();
+
+    expect($seen)->toBe(['b'])
+        ->and($report->filtered)->toBe(1);
+});
+
 it('passes the UpsertResult to onWritten', function () {
     $writer = new FakeWpPostWriter();
     $seen = [];

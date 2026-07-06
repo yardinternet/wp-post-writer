@@ -17,6 +17,7 @@ final class SomeImport extends Command
             ->write(fn (array $row): PostWrite => $this->toWrite($row))
             ->onWritten(fn (UpsertResult $r) => $this->info(ucfirst($r->action->value) . " {$r->id}"))
             ->onSkip(fn (array $row, \Throwable $e) => $this->warn("skip {$row['id']}: {$e->getMessage()}"))
+            ->onFiltered(fn (array $row) => $this->line("filtered {$row['id']}"))
             ->prune()
             ->run();
 
@@ -56,6 +57,9 @@ final class SomeImport extends Command
 - **`failFast()`?** Is een rijfout een signaal dat de hele run moet stoppen → `->failFast()`. Is het
   ruis (af en toe een rare rij) → laat weg (default skip).
 - **`dryRun()`?** Test eerst tegen productie-achtige data; draai met `->dryRun()` en lees het report.
+  Alle callbacks (`onWritten`/`onSkip`/`onPruned`/`onFiltered`) vuren óók in dry-run; wil je die
+  logregels markeren, prefix ze dan zelf (de command weet of het een dry-run is). Bij een dry-run
+  create is `UpsertResult->id` nog `0`.
 
 ## Harde regels (do/don't)
 

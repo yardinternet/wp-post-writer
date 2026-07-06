@@ -1,8 +1,8 @@
 # yard/wp-post-writer
 
-Synchroniseer WordPress-posts vanuit een externe bron: **upsert** wat de bron levert en **verwijder**
-posts die niet meer uit de bron komen. Bron-agnostisch — jij beschrijft *wat* te schrijven en *hoe*
-een rij te identificeren; de package regelt de persistentie en de reconciliatie.
+Synchroniseer WordPress-posts vanuit een externe bron: **maak aan of werk bij** wat de bron levert,
+en **verwijder** posts die niet meer in de bron staan. Bron-agnostisch — jij beschrijft *wat* je
+schrijft en *hoe* je een rij herkent; de package regelt het opslaan en het opruimen.
 
 ## Requirements
 
@@ -23,7 +23,7 @@ use Yard\PostWriter\UpsertResult;
 use Yard\PostWriter\WpPostWriter;
 
 $report = WpPostWriter::sync('member')
-    ->from($this->fetchRows())                                   // iterable/generator
+    ->from($this->fetchRows())                                    // iterable of generator
     ->filter(fn (array $row): bool => 'active' === $row['status'])
     ->identify(fn (array $row): string => (string) $row['id'], 'external_id')
     ->write(fn (array $row): PostWrite => new PostWrite(
@@ -41,20 +41,23 @@ echo $report->summary();
 
 ## Opties (builder)
 
-- `from(iterable $items)` — de bron. Lazy generators aanbevolen (zie *Generator & yield*).
-- `filter(callable $fn): bool` — `false` laat de rij volledig vallen; die rij is dáármee vatbaar
-  voor prune (hij hoort niet bij de collectie).
-- `identify(callable $fn, string $metaKey)` — identiteit per rij. Levert de match voor upsert én de
-  keep-waarde voor prune. Draait vóór `write()`, zodat een rij die in `write()` faalt tóch tegen
-  prune beschermd blijft.
-- `write(callable $fn): PostWrite` — map de rij naar een `PostWrite`. Een `Throwable` = skip.
+- `from(iterable $items)` — de bron. Gebruik bij voorkeur een lazy generator (zie *Generator & yield*).
+- `filter(callable $fn): bool` — `false` laat de rij vallen. Zo'n rij hoort niet bij de collectie en
+  wordt daarom ook door `prune()` verwijderd.
+- `identify(callable $fn, string $metaKey)` — de identiteit per rij. Bepaalt welke post `write()`
+  bijwerkt en welke posts `prune()` behoudt. Draait vóór `write()`, zodat een rij die in `write()`
+  faalt niet per ongeluk wordt verwijderd.
+- `write(callable $fn): PostWrite` — zet de rij om naar een `PostWrite`. Gooi een `Throwable` om de
+  rij over te slaan.
 - `onWritten(callable(UpsertResult))`, `onSkip(callable($item, \Throwable))`,
-  `onPruned(callable(int $id))` — live callbacks.
-- `failFast()` — de eerste fout borrelt op uit `run()`; prune draait dan niet (niets wordt verwijderd).
-- `prune()` — verwijder posts die niet zijn gezien. Lege keep-set → prune overgeslagen + waarschuwing.
-- `dryRun()` — niets schrijven; het report toont wat er zóú gebeuren. `onSkip` vuurt nog (validatie),
-  `onWritten`/`onPruned` niet.
-- `run(): SyncReport` — draait alles binnen `bulk()` (indexers/tellers opgeschort).
+  `onPruned(callable(int $id))`, `onFiltered(callable($item))` — callbacks per verwerkte rij.
+- `failFast()` — de eerste fout stopt de run meteen; `prune()` draait dan niet (er wordt niets verwijderd).
+- `prune()` — verwijder posts die niet in de bron voorkwamen. Is er geen enkele rij gezien, dan slaat
+  prune over met een waarschuwing.
+- `dryRun()` — schrijf niets; het report toont wat er zóú gebeuren. Alle callbacks vuren óók in dry-run.
+  Bij een nog-aan-te-maken post is `UpsertResult->id` nog `0` en is `action` gelijk aan `Created`.
+  Wil je die logregels als dry-run markeren, prefix ze dan zelf.
+- `run(): SyncReport` — draait alles binnen `bulk()` (indexers en tellers tijdelijk uit).
 
 ### `PostWrite`
 
@@ -62,28 +65,29 @@ echo $report->summary();
 new PostWrite(
     title: 'Acme',
     content: null, excerpt: null, slug: null,
-    date: new DateTimeImmutable('2026-01-02 03:04:05'),  // ?DateTimeInterface; site-lokale tijd
-    author: null, parent: null, menuOrder: null,         // null = veld niet aanraken
-    meta: ['external_id' => '42'],                        // null/'' wist een veld
+    date: new DateTimeImmutable('2026-01-02 03:04:05'),   // ?DateTimeInterface; site-lokale tijd
+    author: null, parent: null, menuOrder: null,          // null = veld niet aanraken
+    meta: ['external_id' => '42'],                        // null of '' wist een veld
     terms: ['sector' => TermSelection::names(['Bouw'])],
     insertStatus: 'publish',                              // alleen bij insert; update raakt status niet
 );
 ```
 
-`menuOrder` en alle `?`-velden: niet meegeven = niet aanraken (redacteur behoudt z'n waarde).
+`menuOrder` en alle `?`-velden: niet meegeven = niet aanraken (de redacteur behoudt z'n waarde).
 `insertStatus` geldt alleen bij aanmaken; een herhaalde sync overschrijft een handmatige status niet.
 
 ### `TermSelection`
 
 ```php
-TermSelection::names(['Bouw', 'Infra']);          // namen; aangemaakt indien afwezig
-TermSelection::ids([42, 43]);                      // bestaande term-id's
-new TermSelection(names: ['Noord'], ids: [42]);    // gemengd
-new TermSelection();                               // leeg → ontkoppelt alle termen van die taxonomie van de post
+TermSelection::names(['Bouw', 'Infra']);          // namen; maakt ontbrekende aan
+TermSelection::ids([42, 43]);                     // bestaande term-id's
+new TermSelection(names: ['Noord'], ids: [42]);   // gemengd
+new TermSelection();                              // leeg → ontkoppelt de termen van die taxonomie
 ```
 
-Een taxonomie die je niet in `terms` opneemt, blijft ongemoeid; aanwezig-maar-leeg ontkoppelt de
-termen van die taxonomie van de post (de taxonomie en termen zelf blijven bestaan).
+Een taxonomie die je niet in `terms` opneemt, blijft ongemoeid. Een taxonomie die je meegeeft maar
+leeg laat, ontkoppelt de termen van die taxonomie van de post (de taxonomie en de termen zelf blijven
+bestaan).
 
 ### `SyncReport` / `UpsertResult`
 
@@ -109,16 +113,16 @@ $writer->bulk(fn () => /* meerdere writes met indexers opgeschort */);
 ## Wat in de site blijft (tips)
 
 - **De bron** (paginatie, auth) en **de mapping** naar `PostWrite` blijven van jou.
-- Filter bij voorkeur in de bron (server-side); gebruik `filter()` alleen als dat niet kan.
+- Filter bij voorkeur al in de bron (server-side); gebruik `filter()` alleen als dat niet kan.
 - **Uitgelichte afbeelding**: doe de sideload in `write()` (`media_handle_sideload`) en zet de
-  resulterende attachment-id als `_thumbnail_id`-meta. De package blijft zo bron-agnostisch.
+  resulterende attachment-id als `_thumbnail_id`-meta. Zo blijft de package bron-agnostisch.
 - Draai eerst een `dryRun()` en maak een DB-backup vóór een productie-sync.
 
 ## Generator & `yield`
 
-`from()` itereert de bron **precies één keer** en bouwt de keep-set in diezelfde pass op; hij
-materialiseert de bron **nooit** tot een array. Gebruik daarom een lazy generator, zodat het geheugen
-vlak blijft ongeacht de datasetgrootte:
+`from()` doorloopt de bron **precies één keer** en bouwt tijdens diezelfde doorloop de lijst van
+te-behouden posts op; de hele bron wordt **nooit** als array in het geheugen geladen. Gebruik daarom
+een lazy generator, dan blijft het geheugengebruik gelijk ongeacht de grootte van de dataset:
 
 ```php
 private function fetchRows(): \Generator
@@ -135,4 +139,4 @@ private function fetchRows(): \Generator
 Gotcha's:
 - Een generator is **eenmalig** itereerbaar — de package doet dat; itereer 'm niet zelf nogmaals.
 - Gebruik `yield from` per pagina; verzamel niet alles in een array.
-- Doe geen `iterator_to_array()` op de bron — dat verslaat het doel.
+- Doe geen `iterator_to_array()` op de bron — dat haalt het voordeel onderuit.
