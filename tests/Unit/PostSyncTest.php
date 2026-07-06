@@ -54,6 +54,44 @@ it('passes null to write for a new item and the post id for an existing item', f
     expect($seen)->toBe(['a' => null, 'b' => 55]);
 });
 
+it('writes the identity meta without the mapper setting it', function () {
+    $writer = new FakeWpPostWriter();
+
+    (new PostSync($writer, 'member'))
+        ->from([['id' => 'a']])
+        ->identify(fn (array $row): string => $row['id'], 'external_id')
+        ->write(fn (array $row): PostWrite => new PostWrite(title: 'x'))
+        ->run();
+
+    expect($writer->upserts[0][1]->meta)->toBe(['external_id' => 'a']);
+});
+
+it('overrides a mapper-set identity meta with the identify value', function () {
+    $writer = new FakeWpPostWriter();
+
+    (new PostSync($writer, 'member'))
+        ->from([['id' => 'a']])
+        ->identify(fn (array $row): string => $row['id'], 'external_id')
+        ->write(fn (array $row): PostWrite => new PostWrite(
+            title: 'x',
+            meta: ['external_id' => 'stale', 'name' => 'Acme'],
+        ))
+        ->run();
+
+    expect($writer->upserts[0][1]->meta)->toBe(['external_id' => 'a', 'name' => 'Acme']);
+});
+
+it('leaves meta untouched without identify', function () {
+    $writer = new FakeWpPostWriter();
+
+    (new PostSync($writer, 'member'))
+        ->from([['id' => 'a']])
+        ->write(fn (array $row): PostWrite => new PostWrite(title: 'x', meta: ['name' => 'Acme']))
+        ->run();
+
+    expect($writer->upserts[0][1]->meta)->toBe(['name' => 'Acme']);
+});
+
 it('runs find exactly once per row', function () {
     $writer = new FakeWpPostWriter();
     $writer->existing = ['b' => 55];

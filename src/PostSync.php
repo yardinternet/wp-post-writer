@@ -206,6 +206,11 @@ final class PostSync
 			return;
 		}
 
+		$this->upsertItem($item);
+	}
+
+	private function upsertItem(mixed $item): void
+	{
 		if (null === $this->writeFn) {
 			return;
 		}
@@ -214,7 +219,9 @@ final class PostSync
 		$existingId = $this->writer->find($this->postType, $matchMeta);
 
 		try {
-			$this->persist(($this->writeFn)($item, $existingId), $existingId);
+			$write = ($this->writeFn)($item, $existingId);
+			$write->meta = $matchMeta + $write->meta;
+			$this->persist($write, $existingId);
 		} catch (\Throwable $e) {
 			if ($this->failFast) {
 				throw $e;

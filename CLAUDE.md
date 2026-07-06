@@ -41,7 +41,6 @@ final class SomeImport extends Command
         // validate here; throw to skip the row
         return new PostWrite(
             title: $row['name'],
-            meta: ['external_id' => (string) $row['id']],
             terms: ['sector' => TermSelection::names($row['sectors'])],
         );
     }
@@ -67,6 +66,8 @@ final class SomeImport extends Command
   tegen prune. De mapper zet **geen** `matchMeta` (bestaat niet meer op `PostWrite`).
 - `write()` krijgt als tweede argument de al-gevonden bestaande post-ID (`null` = nieuwe post). Doe
   in de mapper **geen** eigen `find()`/`get_posts`-lookup — de package heeft die al gedaan.
+- De mapper zet de identity-meta **niet** zelf in `meta` — `identify()` is de enige bron; de package
+  merget 'm in `PostWrite->meta` en overschrijft een eventuele mapper-waarde.
 - `filter()` → `false` = "hoort er niet bij" (vatbaar voor prune). Een `Throwable` uit `write()` =
   skip ("hoort erbij, kon nu niet"). Verwar deze twee niet.
 - De bron is een **generator die `yield`t**; nooit naar een array, nooit dubbel itereren, geen

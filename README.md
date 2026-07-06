@@ -28,7 +28,6 @@ $report = WpPostWriter::sync('member')
     ->identify(fn (array $row): string => (string) $row['id'], 'external_id')
     ->write(fn (array $row, ?int $existingId): PostWrite => new PostWrite(
         title: $row['name'],
-        meta: ['external_id' => (string) $row['id']],
         terms: ['sector' => TermSelection::names($row['sectors'])],
     ))
     ->onWritten(fn (UpsertResult $r) => printf("%s %d\n", $r->action->value, $r->id))
@@ -46,7 +45,9 @@ echo $report->summary();
   wordt daarom ook door `prune()` verwijderd.
 - `identify(callable $fn, string $metaKey)` — de identiteit per rij. Bepaalt welke post `write()`
   bijwerkt en welke posts `prune()` behoudt. Draait vóór `write()`, zodat een rij die in `write()`
-  faalt niet per ongeluk wordt verwijderd.
+  faalt niet per ongeluk wordt verwijderd. De package schrijft de identity-meta zelf op de post —
+  zet 'm niet ook in `meta` van de `PostWrite` (een mapper-waarde wordt overschreven door de
+  identify-waarde).
 - `write(callable $fn): PostWrite` — zet de rij om naar een `PostWrite`; signatuur
   `fn (mixed $item, ?int $existingId): PostWrite`. Het tweede argument is de al-gevonden bestaande
   post-ID (`null` = nieuwe post) — doe geen eigen lookup in de mapper. Gooi een `Throwable` om de
@@ -69,7 +70,7 @@ new PostWrite(
     content: null, excerpt: null, slug: null,
     date: new DateTimeImmutable('2026-01-02 03:04:05'),   // ?DateTimeInterface; site-lokale tijd
     author: null, parent: null, menuOrder: null,          // null = veld niet aanraken
-    meta: ['external_id' => '42'],                        // null of '' wist een veld
+    meta: ['website' => 'https://acme.example'],          // null of '' wist een veld; de identity-meta zet de package zelf
     terms: ['sector' => TermSelection::names(['Bouw'])],
     insertStatus: 'publish',                              // alleen bij insert; update raakt status niet
 );
