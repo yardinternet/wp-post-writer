@@ -46,6 +46,22 @@ it('fires onWritten in dry-run with a synthetic result', function () {
         ->and($writer->upserts)->toBe([]);
 });
 
+it('runs find exactly once per row in dry-run mode', function () {
+    $writer = new FakeWpPostWriter();
+    $writer->existing = ['b' => 55];
+
+    $report = (new PostSync($writer, 'member'))
+        ->from([['id' => 'a'], ['id' => 'b']])
+        ->identify(fn (array $row): string => $row['id'], 'external_id')
+        ->write(fn (array $row): PostWrite => new PostWrite(title: $row['id']))
+        ->dryRun()
+        ->run();
+
+    expect($writer->findCalls)->toBe(2)
+        ->and($report->created)->toBe(1)
+        ->and($report->updated)->toBe(1);
+});
+
 it('fires onPruned in dry-run for each prunable id', function () {
     $writer = new FakeWpPostWriter();
     $writer->deletedByPrune = [7, 8];

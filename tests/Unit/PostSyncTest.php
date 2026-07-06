@@ -22,16 +22,49 @@ it('upserts each item and counts created and updated', function () {
         ->and($writer->upserts)->toHaveCount(2);
 });
 
-it('passes match meta from identify to upsert', function () {
+it('passes the resolved existing id to upsert', function () {
     $writer = new FakeWpPostWriter();
+    $writer->existing = ['b' => 55];
 
     (new PostSync($writer, 'member'))
-        ->from([['id' => 'a']])
+        ->from([['id' => 'a'], ['id' => 'b']])
         ->identify(fn (array $row): string => $row['id'], 'external_id')
         ->write(fn (array $row): PostWrite => new PostWrite(title: 'x'))
         ->run();
 
-    expect($writer->upserts[0][2])->toBe(['external_id' => 'a']);
+    expect($writer->upserts[0][2])->toBeNull()
+        ->and($writer->upserts[1][2])->toBe(55);
+});
+
+it('passes null to write for a new item and the post id for an existing item', function () {
+    $writer = new FakeWpPostWriter();
+    $writer->existing = ['b' => 55];
+    $seen = [];
+
+    (new PostSync($writer, 'member'))
+        ->from([['id' => 'a'], ['id' => 'b']])
+        ->identify(fn (array $row): string => $row['id'], 'external_id')
+        ->write(function (array $row, ?int $existingId) use (&$seen): PostWrite {
+            $seen[$row['id']] = $existingId;
+
+            return new PostWrite(title: $row['id']);
+        })
+        ->run();
+
+    expect($seen)->toBe(['a' => null, 'b' => 55]);
+});
+
+it('runs find exactly once per row', function () {
+    $writer = new FakeWpPostWriter();
+    $writer->existing = ['b' => 55];
+
+    (new PostSync($writer, 'member'))
+        ->from([['id' => 'a'], ['id' => 'b'], ['id' => 'c']])
+        ->identify(fn (array $row): string => $row['id'], 'external_id')
+        ->write(fn (array $row): PostWrite => new PostWrite(title: $row['id']))
+        ->run();
+
+    expect($writer->findCalls)->toBe(3);
 });
 
 it('skips on write exception and calls onSkip', function () {

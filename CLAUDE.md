@@ -14,7 +14,7 @@ final class SomeImport extends Command
         $report = WpPostWriter::sync('member')
             ->from($this->fetchRows())
             ->identify(fn (array $row): string => (string) ($row['id'] ?? ''), 'external_id')
-            ->write(fn (array $row): PostWrite => $this->toWrite($row))
+            ->write(fn (array $row, ?int $existingId): PostWrite => $this->toWrite($row, $existingId))
             ->onWritten(fn (UpsertResult $r) => $this->info(ucfirst($r->action->value) . " {$r->id}"))
             ->onSkip(fn (array $row, \Throwable $e) => $this->warn("skip {$row['id']}: {$e->getMessage()}"))
             ->onFiltered(fn (array $row) => $this->line("filtered {$row['id']}"))
@@ -36,7 +36,7 @@ final class SomeImport extends Command
         } while (count($rows) === 100);
     }
 
-    private function toWrite(array $row): PostWrite
+    private function toWrite(array $row, ?int $existingId): PostWrite
     {
         // validate here; throw to skip the row
         return new PostWrite(
@@ -65,6 +65,8 @@ final class SomeImport extends Command
 
 - `identify()` levert de identiteit en draait vóór `write()` — zo blijft een gefaalde rij beschermd
   tegen prune. De mapper zet **geen** `matchMeta` (bestaat niet meer op `PostWrite`).
+- `write()` krijgt als tweede argument de al-gevonden bestaande post-ID (`null` = nieuwe post). Doe
+  in de mapper **geen** eigen `find()`/`get_posts`-lookup — de package heeft die al gedaan.
 - `filter()` → `false` = "hoort er niet bij" (vatbaar voor prune). Een `Throwable` uit `write()` =
   skip ("hoort erbij, kon nu niet"). Verwar deze twee niet.
 - De bron is een **generator die `yield`t**; nooit naar een array, nooit dubbel itereren, geen

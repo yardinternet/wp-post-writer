@@ -7,7 +7,6 @@ use Yard\PostWriter\TermSelection;
 use Yard\PostWriter\WpPostWriter;
 
 it('throws when term assignment returns a wp error', function () {
-    WP_Mock::userFunction('get_posts')->andReturn([]);
     WP_Mock::userFunction('wp_insert_post')->andReturn(9);
     WP_Mock::userFunction('update_field')->andReturn(true);
 

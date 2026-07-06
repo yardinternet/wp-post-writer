@@ -7,8 +7,8 @@ use Yard\PostWriter\TermSelection;
 use Yard\PostWriter\UpsertAction;
 use Yard\PostWriter\WpPostWriter;
 
-it('inserts when no match is found and returns created', function () {
-    WP_Mock::userFunction('get_posts')->andReturn([]);
+it('inserts without querying when no existing id is given', function () {
+    WP_Mock::userFunction('get_posts')->never();
     WP_Mock::userFunction('is_wp_error')->andReturn(false);
     WP_Mock::userFunction('update_field')->andReturn(true);
     WP_Mock::userFunction('wp_set_object_terms')->andReturn([1]);
@@ -20,38 +20,46 @@ it('inserts when no match is found and returns created', function () {
         terms: ['sector' => TermSelection::names(['Bouw'])],
     );
 
-    $result = (new WpPostWriter())->upsert('member', $write, ['external_id' => '42']);
+    $result = (new WpPostWriter())->upsert('member', $write, null);
 
     expect($result->id)->toBe(100)
         ->and($result->action)->toBe(UpsertAction::Created);
 });
 
-it('updates when a match is found and returns updated', function () {
-    WP_Mock::userFunction('get_posts')->andReturn([55]);
+it('updates the given existing id without querying', function () {
+    WP_Mock::userFunction('get_posts')->never();
     WP_Mock::userFunction('is_wp_error')->andReturn(false);
-    WP_Mock::userFunction('update_field')->andReturn(true);
     WP_Mock::userFunction('wp_update_post')->once()->andReturnUsing(fn (array $arr): int => $arr['ID']);
+
+    $writtenMeta = [];
+    WP_Mock::userFunction('update_field')->andReturnUsing(
+        function (string $key, mixed $value, int $id) use (&$writtenMeta): bool {
+            $writtenMeta[$key] = $value;
+
+            return true;
+        },
+    );
 
     $write = new PostWrite(title: 'Acme', meta: ['external_id' => '42']);
 
-    $result = (new WpPostWriter())->upsert('member', $write, ['external_id' => '42']);
+    $result = (new WpPostWriter())->upsert('member', $write, 55);
 
     expect($result->id)->toBe(55)
-        ->and($result->action)->toBe(UpsertAction::Updated);
+        ->and($result->action)->toBe(UpsertAction::Updated)
+        ->and($writtenMeta)->toBe(['external_id' => '42']);
 });
 
-it('forces insert on empty match meta', function () {
+it('inserts when the existing id is omitted', function () {
     WP_Mock::userFunction('is_wp_error')->andReturn(false);
     WP_Mock::userFunction('get_posts')->never();
     WP_Mock::userFunction('wp_insert_post')->once()->andReturn(7);
 
-    $result = (new WpPostWriter())->upsert('member', new PostWrite(title: 'X'), []);
+    $result = (new WpPostWriter())->upsert('member', new PostWrite(title: 'X'));
 
     expect($result->action)->toBe(UpsertAction::Created);
 });
 
 it('maps typed fields to wp_insert_post arguments', function () {
-    WP_Mock::userFunction('get_posts')->andReturn([]);
     WP_Mock::userFunction('is_wp_error')->andReturn(false);
     WP_Mock::userFunction('wp_insert_post')->once()->andReturnUsing(function (array $arr): int {
         expect($arr['post_title'])->toBe('Acme')
@@ -75,7 +83,6 @@ it('maps typed fields to wp_insert_post arguments', function () {
 });
 
 it('resolves a term selection to names and ids', function () {
-    WP_Mock::userFunction('get_posts')->andReturn([]);
     WP_Mock::userFunction('is_wp_error')->andReturn(false);
     WP_Mock::userFunction('wp_insert_post')->andReturn(9);
 

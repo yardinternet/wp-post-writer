@@ -13,10 +13,8 @@ class WpPostWriter
 		return new PostSync(new self(), $postType);
 	}
 
-	/** @param array<string, string> $matchMeta */
-	public function upsert(string $postType, PostWrite $write, array $matchMeta = []): UpsertResult
+	public function upsert(string $postType, PostWrite $write, ?int $existingId = null): UpsertResult
 	{
-		$existingId = $this->find($postType, $matchMeta);
 		$core = $this->core($write);
 
 		if (null !== $existingId) {

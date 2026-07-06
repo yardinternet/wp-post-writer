@@ -26,7 +26,7 @@ $report = WpPostWriter::sync('member')
     ->from($this->fetchRows())                                    // iterable of generator
     ->filter(fn (array $row): bool => 'active' === $row['status'])
     ->identify(fn (array $row): string => (string) $row['id'], 'external_id')
-    ->write(fn (array $row): PostWrite => new PostWrite(
+    ->write(fn (array $row, ?int $existingId): PostWrite => new PostWrite(
         title: $row['name'],
         meta: ['external_id' => (string) $row['id']],
         terms: ['sector' => TermSelection::names($row['sectors'])],
@@ -47,7 +47,9 @@ echo $report->summary();
 - `identify(callable $fn, string $metaKey)` — de identiteit per rij. Bepaalt welke post `write()`
   bijwerkt en welke posts `prune()` behoudt. Draait vóór `write()`, zodat een rij die in `write()`
   faalt niet per ongeluk wordt verwijderd.
-- `write(callable $fn): PostWrite` — zet de rij om naar een `PostWrite`. Gooi een `Throwable` om de
+- `write(callable $fn): PostWrite` — zet de rij om naar een `PostWrite`; signatuur
+  `fn (mixed $item, ?int $existingId): PostWrite`. Het tweede argument is de al-gevonden bestaande
+  post-ID (`null` = nieuwe post) — doe geen eigen lookup in de mapper. Gooi een `Throwable` om de
   rij over te slaan.
 - `onWritten(callable(UpsertResult))`, `onSkip(callable($item, \Throwable))`,
   `onPruned(callable(int $id))`, `onFiltered(callable($item))` — callbacks per verwerkte rij.
@@ -104,8 +106,8 @@ Zonder de builder, voor losse schrijfacties:
 
 ```php
 $writer = new WpPostWriter();
-$result = $writer->upsert('member', $write, ['external_id' => '42']);   // UpsertResult
 $exists = $writer->find('member', ['external_id' => '42']);             // ?int
+$result = $writer->upsert('member', $write, $exists);                   // UpsertResult; null = insert
 $deleted = $writer->prune('member', 'external_id', keep: ['42', '43']); // list<int>
 $writer->bulk(fn () => /* meerdere writes met indexers opgeschort */);
 ```

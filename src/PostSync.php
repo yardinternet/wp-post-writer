@@ -17,7 +17,7 @@ final class PostSync
 
 	private ?string $identityMeta = null;
 
-	/** @var null|callable(mixed):PostWrite */
+	/** @var null|callable(mixed,?int):PostWrite */
 	private $writeFn = null;
 
 	/** @var null|callable(UpsertResult):void */
@@ -85,7 +85,7 @@ final class PostSync
 		return $this;
 	}
 
-	/** @param callable(mixed):PostWrite $fn */
+	/** @param callable(mixed,?int):PostWrite $fn */
 	public function write(callable $fn): self
 	{
 		$this->writeFn = $fn;
@@ -211,9 +211,10 @@ final class PostSync
 		}
 
 		$matchMeta = $this->matchMeta($item);
+		$existingId = $this->writer->find($this->postType, $matchMeta);
 
 		try {
-			$this->persist(($this->writeFn)($item), $matchMeta);
+			$this->persist(($this->writeFn)($item, $existingId), $existingId);
 		} catch (\Throwable $e) {
 			if ($this->failFast) {
 				throw $e;
@@ -242,25 +243,16 @@ final class PostSync
 		return [$this->identityMeta => $identity];
 	}
 
-	/** @param array<string, string> $matchMeta */
-	private function persist(PostWrite $write, array $matchMeta): void
+	private function persist(PostWrite $write, ?int $existingId): void
 	{
 		$result = $this->dryRun
-			? $this->simulate($matchMeta)
-			: $this->writer->upsert($this->postType, $write, $matchMeta);
+			? new UpsertResult($existingId ?? 0, null === $existingId ? UpsertAction::Created : UpsertAction::Updated)
+			: $this->writer->upsert($this->postType, $write, $existingId);
 
 		UpsertAction::Created === $result->action ? $this->created++ : $this->updated++;
 
 		if (null !== $this->onWrittenFn) {
 			($this->onWrittenFn)($result);
 		}
-	}
-
-	/** @param array<string, string> $matchMeta */
-	private function simulate(array $matchMeta): UpsertResult
-	{
-		$id = $this->writer->find($this->postType, $matchMeta);
-
-		return new UpsertResult($id ?? 0, null === $id ? UpsertAction::Created : UpsertAction::Updated);
 	}
 }

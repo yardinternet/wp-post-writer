@@ -11,8 +11,10 @@ use Yard\PostWriter\WpPostWriter;
 
 final class FakeWpPostWriter extends WpPostWriter
 {
-    /** @var list<array{0:string,1:PostWrite,2:array<string,string>}> */
+    /** @var list<array{0:string,1:PostWrite,2:?int}> */
     public array $upserts = [];
+
+    public int $findCalls = 0;
 
     /** @var list<array{0:string,1:string,2:array<int,string>}> */
     public array $pruneCalls = [];
@@ -27,27 +29,21 @@ final class FakeWpPostWriter extends WpPostWriter
 
     public bool $bulkUsed = false;
 
-    /** @param array<string, string> $matchMeta */
-    public function upsert(string $postType, PostWrite $write, array $matchMeta = []): UpsertResult
+    public function upsert(string $postType, PostWrite $write, ?int $existingId = null): UpsertResult
     {
-        $this->upserts[] = [$postType, $write, $matchMeta];
-        $identity = [] === $matchMeta ? '' : (string) reset($matchMeta);
+        $this->upserts[] = [$postType, $write, $existingId];
 
-        if ('' !== $identity && isset($this->existing[$identity])) {
-            return new UpsertResult($this->existing[$identity], UpsertAction::Updated);
+        if (null !== $existingId) {
+            return new UpsertResult($existingId, UpsertAction::Updated);
         }
 
-        $id = $this->nextId++;
-        if ('' !== $identity) {
-            $this->existing[$identity] = $id;
-        }
-
-        return new UpsertResult($id, UpsertAction::Created);
+        return new UpsertResult($this->nextId++, UpsertAction::Created);
     }
 
     /** @param array<string, string> $matchMeta */
     public function find(string $postType, array $matchMeta): ?int
     {
+        $this->findCalls++;
         $identity = [] === $matchMeta ? '' : (string) reset($matchMeta);
 
         return '' === $identity ? null : ($this->existing[$identity] ?? null);
