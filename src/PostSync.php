@@ -262,9 +262,7 @@ final class PostSync
 		UpsertAction::Created === $result->action ? $this->created++ : $this->updated++;
 
 		if (null !== $this->onWrittenFn) {
-			// Existing callers use single-parameter closures; PHP closures reject extra arguments, so probe arity before passing $item.
-			$wantsItem = 2 <= (new \ReflectionFunction(\Closure::fromCallable($this->onWrittenFn)))->getNumberOfParameters();
-			$wantsItem ? ($this->onWrittenFn)($result, $item) : ($this->onWrittenFn)($result);
+			($this->onWrittenFn)($result, $item);
 		}
 	}
 }

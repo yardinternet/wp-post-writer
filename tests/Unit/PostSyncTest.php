@@ -219,7 +219,8 @@ it('still supports single-parameter onWritten callbacks', function () {
         })
         ->run();
 
-    expect($results)->toHaveCount(1);
+    expect($results)->toHaveCount(1)
+        ->and($results[0])->toBeInstanceOf(UpsertResult::class);
 });
 
 it('wraps the work in bulk', function () {
