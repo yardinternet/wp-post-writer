@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Yard\PostWriter\PostSync;
 use Yard\PostWriter\PostWrite;
+use Yard\PostWriter\PruneMode;
 use Yard\PostWriter\Tests\Support\FakeWpPostWriter;
 
 it('prunes with the collected keep set and counts', function () {
@@ -64,4 +65,17 @@ it('deduplicates the keep set', function () {
         ->run();
 
     expect($writer->pruneCalls[0][2])->toBe(['a']);
+});
+
+it('passes the prune mode to the writer', function () {
+    $writer = new FakeWpPostWriter();
+
+    (new PostSync($writer, 'member'))
+        ->from([['id' => 'a']])
+        ->identify(fn (array $r): string => $r['id'], 'external_id')
+        ->write(fn (): PostWrite => new PostWrite(title: 'x'))
+        ->prune(PruneMode::Draft)
+        ->run();
+
+    expect($writer->lastPruneMode)->toBe(PruneMode::Draft);
 });

@@ -26,6 +26,8 @@ final class FakeWpPostWriter extends WpPostWriter
     /** @var list<int> */
     public array $deletedByPrune = [];
 
+    public ?PruneMode $lastPruneMode = null;
+
     public int $nextId = 1;
 
     public bool $bulkUsed = false;
@@ -57,6 +59,8 @@ final class FakeWpPostWriter extends WpPostWriter
      */
     public function prunable(string $postType, string $metaKey, array $keep, PruneMode $mode = PruneMode::Delete): array
     {
+        $this->lastPruneMode = $mode;
+
         return [] === $keep ? [] : $this->deletedByPrune;
     }
 
