@@ -73,7 +73,7 @@ class WpPostWriter
 	 *
 	 * @return list<int>
 	 */
-	public function prunable(string $postType, string $metaKey, array $keep): array
+	public function prunable(string $postType, string $metaKey, array $keep, PruneMode $mode = PruneMode::Delete): array
 	{
 		if ([] === $keep) {
 			return [];
@@ -93,6 +93,10 @@ class WpPostWriter
 			if ('' === $value || in_array($value, $keep, true)) {
 				continue;
 			}
+			// Already-draft posts need no action in draft mode and would inflate the report on every run.
+			if (PruneMode::Draft === $mode && 'draft' === get_post_status($id)) {
+				continue;
+			}
 			$prunable[] = (int) $id;
 		}
 
@@ -104,14 +108,18 @@ class WpPostWriter
 	 *
 	 * @return list<int>
 	 */
-	public function prune(string $postType, string $metaKey, array $keep): array
+	public function prune(string $postType, string $metaKey, array $keep, PruneMode $mode = PruneMode::Delete): array
 	{
-		$deleted = $this->prunable($postType, $metaKey, $keep);
-		foreach ($deleted as $id) {
-			wp_delete_post($id, true);
+		$pruned = $this->prunable($postType, $metaKey, $keep, $mode);
+		foreach ($pruned as $id) {
+			match ($mode) {
+				PruneMode::Delete => wp_delete_post($id, true),
+				PruneMode::Trash => wp_trash_post($id),
+				PruneMode::Draft => wp_update_post(['ID' => $id, 'post_status' => 'draft']),
+			};
 		}
 
-		return $deleted;
+		return $pruned;
 	}
 
 	public function bulk(callable $callback): mixed
