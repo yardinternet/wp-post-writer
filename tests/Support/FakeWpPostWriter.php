@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Yard\PostWriter\Tests\Support;
 
 use Yard\PostWriter\PostWrite;
+use Yard\PostWriter\PruneMode;
 use Yard\PostWriter\UpsertAction;
 use Yard\PostWriter\UpsertResult;
 use Yard\PostWriter\WpPostWriter;
@@ -54,7 +55,7 @@ final class FakeWpPostWriter extends WpPostWriter
      *
      * @return list<int>
      */
-    public function prunable(string $postType, string $metaKey, array $keep): array
+    public function prunable(string $postType, string $metaKey, array $keep, PruneMode $mode = PruneMode::Delete): array
     {
         return [] === $keep ? [] : $this->deletedByPrune;
     }
@@ -64,11 +65,11 @@ final class FakeWpPostWriter extends WpPostWriter
      *
      * @return list<int>
      */
-    public function prune(string $postType, string $metaKey, array $keep): array
+    public function prune(string $postType, string $metaKey, array $keep, PruneMode $mode = PruneMode::Delete): array
     {
         $this->pruneCalls[] = [$postType, $metaKey, $keep];
 
-        return $this->prunable($postType, $metaKey, $keep);
+        return $this->prunable($postType, $metaKey, $keep, $mode);
     }
 
     public function bulk(callable $callback): mixed
