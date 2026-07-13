@@ -190,6 +190,38 @@ it('passes the UpsertResult to onWritten', function () {
     expect($seen)->toBe(['created']);
 });
 
+it('passes the source item to onWritten', function () {
+    $writer = new FakeWpPostWriter();
+    $received = [];
+
+    (new PostSync($writer, 'member'))
+        ->from([['id' => 'a']])
+        ->identify(fn (array $r): string => $r['id'], 'external_id')
+        ->write(fn (): PostWrite => new PostWrite(title: 'x'))
+        ->onWritten(function (UpsertResult $r, mixed $item) use (&$received): void {
+            $received[] = $item;
+        })
+        ->run();
+
+    expect($received)->toBe([['id' => 'a']]);
+});
+
+it('still supports single-parameter onWritten callbacks', function () {
+    $writer = new FakeWpPostWriter();
+    $results = [];
+
+    (new PostSync($writer, 'member'))
+        ->from([['id' => 'a']])
+        ->identify(fn (array $r): string => $r['id'], 'external_id')
+        ->write(fn (): PostWrite => new PostWrite(title: 'x'))
+        ->onWritten(function (UpsertResult $r) use (&$results): void {
+            $results[] = $r;
+        })
+        ->run();
+
+    expect($results)->toHaveCount(1);
+});
+
 it('wraps the work in bulk', function () {
     $writer = new FakeWpPostWriter();
 

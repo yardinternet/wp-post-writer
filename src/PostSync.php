@@ -20,7 +20,7 @@ final class PostSync
 	/** @var null|callable(mixed,?int):PostWrite */
 	private $writeFn = null;
 
-	/** @var null|callable(UpsertResult):void */
+	/** @var null|callable(UpsertResult,mixed=):void */
 	private $onWrittenFn = null;
 
 	/** @var null|callable(mixed,\Throwable):void */
@@ -35,6 +35,8 @@ final class PostSync
 	private bool $failFast = false;
 
 	private bool $prune = false;
+
+	private PruneMode $pruneMode = PruneMode::Delete;
 
 	private bool $dryRun = false;
 
@@ -93,7 +95,7 @@ final class PostSync
 		return $this;
 	}
 
-	/** @param callable(UpsertResult):void $fn */
+	/** @param callable(UpsertResult,mixed=):void $fn */
 	public function onWritten(callable $fn): self
 	{
 		$this->onWrittenFn = $fn;
@@ -132,9 +134,10 @@ final class PostSync
 		return $this;
 	}
 
-	public function prune(): self
+	public function prune(PruneMode $mode = PruneMode::Delete): self
 	{
 		$this->prune = true;
+		$this->pruneMode = $mode;
 
 		return $this;
 	}
@@ -184,8 +187,8 @@ final class PostSync
 		}
 
 		$ids = $this->dryRun
-			? $this->writer->prunable($this->postType, (string) $this->identityMeta, $keep)
-			: $this->writer->prune($this->postType, (string) $this->identityMeta, $keep);
+			? $this->writer->prunable($this->postType, (string) $this->identityMeta, $keep, $this->pruneMode)
+			: $this->writer->prune($this->postType, (string) $this->identityMeta, $keep, $this->pruneMode);
 
 		foreach ($ids as $id) {
 			if (null !== $this->onPrunedFn) {
@@ -221,7 +224,7 @@ final class PostSync
 		try {
 			$write = ($this->writeFn)($item, $existingId);
 			$write->meta = $matchMeta + $write->meta;
-			$this->persist($write, $existingId);
+			$this->persist($write, $existingId, $item);
 		} catch (\Throwable $e) {
 			if ($this->failFast) {
 				throw $e;
@@ -250,7 +253,7 @@ final class PostSync
 		return [$this->identityMeta => $identity];
 	}
 
-	private function persist(PostWrite $write, ?int $existingId): void
+	private function persist(PostWrite $write, ?int $existingId, mixed $item): void
 	{
 		$result = $this->dryRun
 			? new UpsertResult($existingId ?? 0, null === $existingId ? UpsertAction::Created : UpsertAction::Updated)
@@ -259,7 +262,9 @@ final class PostSync
 		UpsertAction::Created === $result->action ? $this->created++ : $this->updated++;
 
 		if (null !== $this->onWrittenFn) {
-			($this->onWrittenFn)($result);
+			// Existing callers use single-parameter closures; PHP closures reject extra arguments, so probe arity before passing $item.
+			$wantsItem = 2 <= (new \ReflectionFunction(\Closure::fromCallable($this->onWrittenFn)))->getNumberOfParameters();
+			$wantsItem ? ($this->onWrittenFn)($result, $item) : ($this->onWrittenFn)($result);
 		}
 	}
 }

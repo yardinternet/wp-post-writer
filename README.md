@@ -18,6 +18,7 @@ composer require yard/wp-post-writer
 
 ```php
 use Yard\PostWriter\PostWrite;
+use Yard\PostWriter\PruneMode;
 use Yard\PostWriter\TermSelection;
 use Yard\PostWriter\UpsertResult;
 use Yard\PostWriter\WpPostWriter;
@@ -30,9 +31,9 @@ $report = WpPostWriter::sync('member')
         title: $row['name'],
         terms: ['sector' => TermSelection::names($row['sectors'])],
     ))
-    ->onWritten(fn (UpsertResult $r) => printf("%s %d\n", $r->action->value, $r->id))
+    ->onWritten(fn (UpsertResult $r, array $row) => printf("%s %d (%s)\n", $r->action->value, $r->id, $row['id']))
     ->onSkip(fn (array $row, \Throwable $e) => printf("skip %s: %s\n", $row['id'], $e->getMessage()))
-    ->prune()
+    ->prune(PruneMode::Draft)
     ->run();
 
 echo $report->summary();
@@ -52,11 +53,18 @@ echo $report->summary();
   `fn (mixed $item, ?int $existingId): PostWrite`. Het tweede argument is de al-gevonden bestaande
   post-ID (`null` = nieuwe post) — doe geen eigen lookup in de mapper. Gooi een `Throwable` om de
   rij over te slaan.
-- `onWritten(callable(UpsertResult))`, `onSkip(callable($item, \Throwable))`,
+- `onWritten(callable(UpsertResult, mixed $item = null))`, `onSkip(callable($item, \Throwable))`,
   `onPruned(callable(int $id))`, `onFiltered(callable($item))` — callbacks per verwerkte rij.
+  `onWritten` mag de bron-rij als optioneel tweede argument opnemen; bestaande callbacks met alleen
+  `UpsertResult` blijven werken.
 - `failFast()` — de eerste fout stopt de run meteen; `prune()` draait dan niet (er wordt niets verwijderd).
-- `prune()` — verwijder posts die niet in de bron voorkwamen. Is er geen enkele rij gezien, dan slaat
-  prune over met een waarschuwing.
+- `prune(PruneMode $mode = PruneMode::Delete)` — ruim posts op die niet in de bron voorkwamen. Is er
+  geen enkele rij gezien, dan slaat prune over met een waarschuwing. Drie modes:
+  - `PruneMode::Delete` (standaard) — verwijdert de post definitief.
+  - `PruneMode::Trash` — verplaatst de post naar de prullenbak.
+  - `PruneMode::Draft` — zet de post op status `draft`. Posts die al `draft` zijn, worden niet
+    opnieuw aangeboden: ze tellen niet mee in `prunable()`/`prune()` en vuren dus geen `onPruned()`
+    en geen extra write, ook niet bij herhaalde runs.
 - `dryRun()` — schrijf niets; het report toont wat er zóú gebeuren. Alle callbacks vuren óók in dry-run.
   Bij een nog-aan-te-maken post is `UpsertResult->id` nog `0` en is `action` gelijk aan `Created`.
   Wil je die logregels als dry-run markeren, prefix ze dan zelf.
@@ -109,7 +117,7 @@ Zonder de builder, voor losse schrijfacties:
 $writer = new WpPostWriter();
 $exists = $writer->find('member', ['external_id' => '42']);             // ?int
 $result = $writer->upsert('member', $write, $exists);                   // UpsertResult; null = insert
-$deleted = $writer->prune('member', 'external_id', keep: ['42', '43']); // list<int>
+$deleted = $writer->prune('member', 'external_id', keep: ['42', '43'], mode: PruneMode::Draft); // list<int>
 $writer->bulk(fn () => /* meerdere writes met indexers opgeschort */);
 ```
 
